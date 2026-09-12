@@ -50,7 +50,14 @@ if prompt := st.chat_input("가입설계에 대해 물어보세요"):
                     chat_history.append(AIMessage(content=m["content"]))
 
             response = llm.invoke(chat_history)
-            answer = response.content
+            # content가 리스트(블록 구조)로 오면 텍스트만 뽑아냄
+            if isinstance(response.content, list):
+                answer = "".join(
+                    block.get("text", "") if isinstance(block, dict) else str(block)
+                    for block in response.content
+                )
+            else:
+                answer = response.content
             st.markdown(answer)
 
     # 답변 저장

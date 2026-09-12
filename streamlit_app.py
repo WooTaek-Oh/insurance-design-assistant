@@ -10,7 +10,7 @@ st.caption("동양생명 FC를 위한 AI 가입설계 도우미 (프로토타입
 @st.cache_resource
 def get_llm():
     return ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model="gemini-flash-latest",
         google_api_key=st.secrets["GOOGLE_API_KEY"],
         temperature=0.3,
     )
@@ -55,3 +55,16 @@ if prompt := st.chat_input("가입설계에 대해 물어보세요"):
 
     # 답변 저장
     st.session_state.messages.append({"role": "assistant", "content": answer})
+
+
+# import streamlit as st
+# import google.generativeai as genai
+#
+# st.title("모델 확인용")
+#
+# genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+#
+# st.write("사용 가능한 모델 목록:")
+# for m in genai.list_models():
+#     if "generateContent" in m.supported_generation_methods:
+#         st.write(m.name)

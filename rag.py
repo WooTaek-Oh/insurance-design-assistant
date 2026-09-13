@@ -36,8 +36,11 @@ EMBEDDING_MODEL_CANDIDATES = [
 ]
 
 # Chroma 기본 거리(L2, 작을수록 유사)의 상위 컷오프.
-# scripts/build_index.py 실행 후 실제 검색 결과를 보고 조정할 것.
-RELEVANCE_DISTANCE_THRESHOLD = 0.8
+# 전체 1,778개 청크 인덱싱 완료 후 실제 질의로 보정한 값 (models/gemini-embedding-001 기준):
+#   실제 약관 질문 거리   0.41 ~ 0.57 (암 진단비, 납입면제, 해지환급금, 고지의무, 면책기간)
+#   무관한 질문 거리      0.64 ~ 0.77 (인사말, 잡담, 주식 시세 등)
+# 두 그룹 사이 간격(0.57~0.64)의 중간값으로 설정.
+RELEVANCE_DISTANCE_THRESHOLD = 0.60
 
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 150

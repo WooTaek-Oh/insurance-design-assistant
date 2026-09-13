@@ -3,5 +3,4 @@ __pycache__/
 *.pyc
 .streamlit/secrets.toml
 .chroma/
-chroma_db/
 .DS_Store

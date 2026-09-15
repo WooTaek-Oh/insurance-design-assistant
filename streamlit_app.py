@@ -65,6 +65,8 @@ if "messages" not in st.session_state:
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+        if msg.get("confidence_label"):
+            st.caption(msg["confidence_label"])
         if msg.get("sources"):
             st.caption(f"📄 참고한 약관 페이지: {msg['sources']}")
 
@@ -89,6 +91,14 @@ if prompt := st.chat_input("가입설계에 대해 물어보세요"):
             context_text = rag.format_context(retrieved) if retrieved else "(검색된 근거 없음)"
             sources = rag.format_sources(retrieved) if has_evidence else None
 
+            # 확신도(%)는 LLM이 말로 지어내는 게 아니라, 실제 검색 거리값을
+            # 그대로 환산한 값이다 (rag.evidence_confidence_percent 참고).
+            confidence_label = (
+                rag.confidence_label(rag.evidence_confidence_percent(retrieved))
+                if retrieved
+                else None
+            )
+
             # 2) 시스템 프롬프트 + 근거를 포함해 대화 맥락 구성
             system_content = f"{SYSTEM_PROMPT}\n\n[검색된 약관 근거]\n{context_text}"
             if not has_evidence:
@@ -112,9 +122,16 @@ if prompt := st.chat_input("가입설계에 대해 물어보세요"):
             else:
                 answer = response.content
             st.markdown(answer)
+            if confidence_label:
+                st.caption(confidence_label)
             if sources:
                 st.caption(f"📄 참고한 약관 페이지: {sources}")
 
     st.session_state.messages.append(
-        {"role": "assistant", "content": answer, "sources": sources}
+        {
+            "role": "assistant",
+            "content": answer,
+            "sources": sources,
+            "confidence_label": confidence_label,
+        }
     )

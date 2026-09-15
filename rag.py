@@ -248,6 +248,39 @@ def has_relevant_evidence(chunks: list[RetrievedChunk]) -> bool:
     return min(c.distance for c in chunks) <= RELEVANCE_DISTANCE_THRESHOLD
 
 
+# 거리를 확신도(%)로 환산하는 선형 구간. RELEVANCE_DISTANCE_THRESHOLD(0.60)를
+# 50%로 두고, 그보다 가까우면(=관련성 높으면) 위로, 멀면 아래로 선형 보간한다.
+# 캘리브레이션 데이터 기준: 0.41(실관련 질문) → 93%, 0.60(경계) → 50%,
+# 0.77(무관 질문) → 12% 정도로 나오도록 기울기를 잡음.
+_CONFIDENCE_ANCHOR_DISTANCE = 0.40
+_CONFIDENCE_ANCHOR_PERCENT = 95.0
+_CONFIDENCE_SLOPE_PER_DISTANCE = 225.0  # 0.20 거리 차이 = 45%p 차이
+
+
+def evidence_confidence_percent(chunks: list[RetrievedChunk]) -> int:
+    """검색 근거의 확신도를 0~100 사이 정수 퍼센트로 반환한다.
+
+    LLM에게 확신도를 말로 지어내게 하지 않고, 실제 벡터 검색 거리값을
+    그대로 환산해서 쓴다 — 형식이 깨질 일도, 근거 없이 %를 부풀릴 일도 없다.
+    """
+    if not chunks:
+        return 0
+    best_distance = min(c.distance for c in chunks)
+    percent = _CONFIDENCE_ANCHOR_PERCENT - _CONFIDENCE_SLOPE_PER_DISTANCE * (
+        best_distance - _CONFIDENCE_ANCHOR_DISTANCE
+    )
+    return max(0, min(100, round(percent)))
+
+
+def confidence_label(percent: int) -> str:
+    """확신도(%)를 사람이 보기 좋은 등급 뱃지 문자열로 변환한다."""
+    if percent >= 70:
+        return f"🟢 근거 확신도 {percent}%"
+    if percent >= 50:
+        return f"🟡 근거 확신도 {percent}% (참고용)"
+    return f"🔴 근거 확신도 {percent}% (관련 근거 부족)"
+
+
 def format_context(chunks: list[RetrievedChunk]) -> str:
     parts = []
     for i, c in enumerate(chunks, start=1):

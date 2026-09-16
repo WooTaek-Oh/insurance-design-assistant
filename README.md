@@ -24,16 +24,20 @@
 > 모델(`gemini-3.8-flash`)로 넘어간 적이 있습니다. 라이브 데모 중 20턴
 > 만에 챗봇이 멈추는 걸 막기 위해 검증된 버전을 고정해서 씁니다.
 
-### 데이터 흐름
+### 시스템 아키텍처
 
+```mermaid
+flowchart LR
+    User["🧑‍💻 사용자"] --> Streamlit["🎈 Streamlit"]
+    Streamlit --> LangChain["🦜🔗 LangChain"]
+    LangChain --> Gemini["✨ Gemini API"]
+    LangChain <--> Chroma["🟠 Chroma"]
 ```
-사용자 질문
-  → Streamlit UI
-  → LangChain
-      ├─ Chroma 벡터 검색 (약관 PDF에서 관련 근거 청크 조회)
-      └─ Gemini API (검색된 근거 + 대화 기록을 바탕으로 답변 생성)
-  → 답변 + 참고 페이지 표시
-```
+
+사용자 질문이 Streamlit UI를 거쳐 LangChain으로 전달되면, LangChain이
+Chroma에서 관련 약관 근거를 검색하고 그 근거 + 대화 기록을 Gemini API에
+전달해 답변을 생성합니다. 생성된 답변은 참고 페이지·확신도와 함께
+Streamlit 화면에 표시됩니다.
 
 ## 주요 기능
 

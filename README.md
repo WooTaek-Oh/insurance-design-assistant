@@ -26,13 +26,7 @@
 
 ### 시스템 아키텍처
 
-```mermaid
-flowchart LR
-    User["🧑‍💻 사용자"] --> Streamlit["🎈 Streamlit"]
-    Streamlit --> LangChain["🦜🔗 LangChain"]
-    LangChain --> Gemini["✨ Gemini API"]
-    LangChain <--> Chroma["🟠 Chroma"]
-```
+![시스템 아키텍처: 사용자 → Streamlit → LangChain → Gemini API / Chroma](assets/architecture.png)
 
 사용자 질문이 Streamlit UI를 거쳐 LangChain으로 전달되면, LangChain이
 Chroma에서 관련 약관 근거를 검색하고 그 근거 + 대화 기록을 Gemini API에

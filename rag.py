@@ -113,13 +113,37 @@ def split_documents(documents: list[Document]) -> list[Document]:
     return splitter.split_documents(documents)
 
 
+def _make_stable_ids(chunks: list[Document]) -> list[str]:
+    """소스 파일명 + 그 파일 안에서의 순번으로 안정적인 id를 만든다.
+
+    (버그 이력) 예전에는 전체 문서 리스트에서의 global index로 id를 매겼는데,
+    docs/에 새 PDF를 추가하면 정렬 순서가 바뀌면서 같은 청크의 id 번호가
+    통째로 밀렸다. 그러면 "이미 저장된 id" 판정이 완전히 어긋나서:
+    - 실제로는 안 끝난 문서(연금보험/실손의료비)가 "이미 있음"으로 오판되어
+      한 번도 임베딩되지 않았고
+    - 이미 끝난 문서(암보험)가 새 id로 다시 임베딩되어 쿼터만 낭비하며
+      중복 저장됐다.
+    파일명은 docs/ 안에서 다른 문서가 추가/삭제돼도 안 바뀌므로, id를
+    (소스 파일명, 그 파일 내 순번) 기준으로 매기면 문서 추가 순서와
+    무관하게 항상 같은 청크가 같은 id를 갖는다.
+    """
+    per_source_counter: dict[str, int] = {}
+    ids: list[str] = []
+    for chunk in chunks:
+        source = os.path.basename(chunk.metadata.get("source", "unknown"))
+        idx = per_source_counter.get(source, 0)
+        per_source_counter[source] = idx + 1
+        ids.append(f"{source}::chunk-{idx:05d}")
+    return ids
+
+
 def _add_in_batches(vectorstore: Chroma, chunks: list[Document], progress_cb=None) -> None:
     """청크를 작은 배치로 나눠 임베딩+저장한다.
 
     - 이미 저장된 id는 건너뛴다 (중간에 끊겨도 재실행 시 이어서 진행 가능).
     - 429(쿼터 초과) 발생 시 지수 백오프로 재시도한다.
     """
-    ids = [f"chunk-{i:05d}" for i in range(len(chunks))]
+    ids = _make_stable_ids(chunks)
 
     existing_ids: set[str] = set()
     try:

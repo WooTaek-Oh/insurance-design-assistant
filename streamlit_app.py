@@ -6,9 +6,37 @@ import design_state
 import rag
 import recommendation as reco
 
-st.set_page_config(page_title="가입설계 챗봇", page_icon="💬")
-st.title("가입설계 챗봇")
-st.caption("동양생명 FC를 위한 AI 가입설계 도우미 (프로토타입) · 약관 RAG 기반")
+st.set_page_config(page_title="가입설계 챗봇", page_icon="🛡️")
+
+USER_AVATAR = "🧑‍💼"
+ASSISTANT_AVATAR = "🛡️"
+
+st.markdown("## 🛡️ 가입설계 챗봇")
+st.caption("동양생명 FC를 위한 AI 가입설계 도우미 (프로토타입) · 약관 근거 기반 답변")
+st.divider()
+
+
+def render_confidence_badge(percent: int) -> str:
+    """확신도(%)를 색이 있는 뱃지 HTML로 렌더링한다 (등급 기준은 rag.confidence_label과 동일)."""
+    if percent >= 70:
+        color, bg, label = "#166534", "#DCFCE7", "근거 확신도"
+    elif percent >= 50:
+        color, bg, label = "#854D0E", "#FEF9C3", "근거 확신도 (참고용)"
+    else:
+        color, bg, label = "#991B1B", "#FEE2E2", "근거 확신도 (관련 근거 부족)"
+    return (
+        f'<span style="background:{bg};color:{color};padding:2px 10px;'
+        f'border-radius:999px;font-size:0.8em;font-weight:600;">'
+        f"{label} {percent}%</span>"
+    )
+
+
+def render_sources_tag(sources: str) -> str:
+    """참고 페이지 목록을 작은 태그 스타일로 렌더링한다."""
+    return (
+        '<span style="color:#6B7280;font-size:0.85em;">📄 참고한 약관 페이지: '
+        f"{sources}</span>"
+    )
 
 
 # Gemini 챗 모델 초기화 (키는 Secrets에서 읽어옴)
@@ -78,19 +106,21 @@ if "design" not in st.session_state:
 def render_design_sidebar():
     """현재까지 대화로 합의된 가입설계 상태를 사이드바에 실시간으로 보여준다."""
     with st.sidebar:
-        st.subheader("📋 현재 가입설계")
-        design = st.session_state.design
-        if design["base_product"]:
-            st.markdown(f"**주계약**: {design['base_product']}")
-        if design["riders"]:
-            st.markdown("**특약**")
-            for name, amount in design["riders"].items():
-                st.markdown(f"- {name}: {amount:,.0f}만원")
-        if not design["base_product"] and not design["riders"]:
-            st.caption("아직 설계된 내용이 없습니다. 채팅으로 상품이나 특약을 요청해보세요.")
-        if st.button("🔄 설계 초기화"):
-            st.session_state.design = {"base_product": None, "riders": {}}
-            st.rerun()
+        with st.container(border=True):
+            st.markdown("#### 📋 현재 가입설계")
+            design = st.session_state.design
+            if design["base_product"]:
+                st.markdown(f"**주계약**")
+                st.markdown(f"　{design['base_product']}")
+            if design["riders"]:
+                st.markdown("**특약**")
+                for name, amount in design["riders"].items():
+                    st.markdown(f"　· {name} — **{amount:,.0f}만원**")
+            if not design["base_product"] and not design["riders"]:
+                st.caption("아직 설계된 내용이 없습니다. 채팅으로 상품이나 특약을 요청해보세요.")
+            if st.button("🔄 설계 초기화", use_container_width=True):
+                st.session_state.design = {"base_product": None, "riders": {}}
+                st.rerun()
 
 
 def render_recommendation_sidebar():
@@ -131,21 +161,24 @@ def render_recommendation_sidebar():
             recs = st.session_state.get("recommendations")
             if recs:
                 st.markdown("---")
-                st.markdown("**추천 결과**")
+                st.markdown("**🏆 추천 결과**")
+                medals = ["🥇", "🥈", "🥉"]
                 for i, r in enumerate(recs):
                     label = r.product + (f" - {r.rider}" if r.rider else "")
                     amount_label = f" ({r.suggested_amount:,}만원)" if r.suggested_amount else ""
-                    st.markdown(f"**{i + 1}. {label}{amount_label}**")
-                    for reason in r.reasons:
-                        st.caption(f"· {reason}")
-                    if st.button("➕ 설계에 추가", key=f"add_reco_{i}"):
-                        design = st.session_state.design
-                        if not design["base_product"]:
-                            design["base_product"] = r.product
-                        if r.rider:
-                            design["riders"][r.rider] = r.suggested_amount or 1000
-                        st.session_state.design = design
-                        st.rerun()
+                    medal = medals[i] if i < len(medals) else "▪️"
+                    with st.container(border=True):
+                        st.markdown(f"**{medal} {label}{amount_label}**")
+                        for reason in r.reasons:
+                            st.caption(f"· {reason}")
+                        if st.button("➕ 설계에 추가", key=f"add_reco_{i}", use_container_width=True):
+                            design = st.session_state.design
+                            if not design["base_product"]:
+                                design["base_product"] = r.product
+                            if r.rider:
+                                design["riders"][r.rider] = r.suggested_amount or 1000
+                            st.session_state.design = design
+                            st.rerun()
 
 
 render_design_sidebar()
@@ -153,20 +186,21 @@ render_recommendation_sidebar()
 
 # 이전 대화 표시 (근거 페이지가 있으면 함께 표시)
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
+    avatar = USER_AVATAR if msg["role"] == "user" else ASSISTANT_AVATAR
+    with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
-        if msg.get("confidence_label"):
-            st.caption(msg["confidence_label"])
+        if msg.get("confidence_percent") is not None:
+            st.markdown(render_confidence_badge(msg["confidence_percent"]), unsafe_allow_html=True)
         if msg.get("sources"):
-            st.caption(f"📄 참고한 약관 페이지: {msg['sources']}")
+            st.markdown(render_sources_tag(msg["sources"]), unsafe_allow_html=True)
 
 # 사용자 입력
 if prompt := st.chat_input("가입설계에 대해 물어보세요"):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(prompt)
 
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
         with st.spinner("약관 검색 중..."):
             # 1) 벡터 검색으로 근거 청크 조회 (임베딩 API 쿼터 초과 등으로 실패해도
             #    앱이 죽지 않고 "근거 없음"으로 안전하게 넘어가게 처리)
@@ -183,11 +217,7 @@ if prompt := st.chat_input("가입설계에 대해 물어보세요"):
 
             # 확신도(%)는 LLM이 말로 지어내는 게 아니라, 실제 검색 거리값을
             # 그대로 환산한 값이다 (rag.evidence_confidence_percent 참고).
-            confidence_label = (
-                rag.confidence_label(rag.evidence_confidence_percent(retrieved))
-                if retrieved
-                else None
-            )
+            confidence_percent = rag.evidence_confidence_percent(retrieved) if retrieved else None
 
             # 2) 시스템 프롬프트 + 근거 + 현재 설계 상태를 포함해 대화 맥락 구성
             design_json = design_state.format_design_state(st.session_state.design)
@@ -228,17 +258,17 @@ if prompt := st.chat_input("가입설계에 대해 물어보세요"):
                 design_changed = True
 
             st.markdown(answer)
-            if confidence_label:
-                st.caption(confidence_label)
+            if confidence_percent is not None:
+                st.markdown(render_confidence_badge(confidence_percent), unsafe_allow_html=True)
             if sources:
-                st.caption(f"📄 참고한 약관 페이지: {sources}")
+                st.markdown(render_sources_tag(sources), unsafe_allow_html=True)
 
     st.session_state.messages.append(
         {
             "role": "assistant",
             "content": answer,
             "sources": sources,
-            "confidence_label": confidence_label,
+            "confidence_percent": confidence_percent,
         }
     )
 

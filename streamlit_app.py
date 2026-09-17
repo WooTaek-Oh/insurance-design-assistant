@@ -13,6 +13,7 @@ ASSISTANT_AVATAR = "🛡️"
 
 st.markdown("## 🛡️ 가입설계 챗봇")
 st.caption("동양생명 FC를 위한 AI 가입설계 도우미 (프로토타입) · 약관 근거 기반 답변")
+st.caption("📚 현재 답변 가능한 상품: 암보험 · 연금보험 · 실손의료비 (그 외 상품은 근거가 없어 \"확인이 필요합니다\"로 응답)")
 st.divider()
 
 
@@ -91,6 +92,10 @@ SYSTEM_PROMPT = """당신은 동양생명 보험설계사(FC)를 돕는 가입�
 - 단, 인사말이나 챗봇 자체에 대한 질문 등 약관 근거가 필요 없는 일반적인
   대화는 자연스럽게 응답하세요.""" + design_state.SYSTEM_PROMPT_ADDITION
 
+# 세션 메시지 전체를 매 턴 통째로 API에 보내면 상담이 길어질수록 비용·지연이
+# 계속 늘어난다. 최근 몇 턴만 컨텍스트로 사용한다 (사용자+어시스턴트 합산 개수).
+MAX_HISTORY_MESSAGES = 10
+
 RELEVANCE_WARNING = (
     "\n\n(주의: 위 근거는 질문과 관련성이 낮을 수 있습니다. "
     "약관 관련 사실 질문이라면 근거 없이 답하지 말고 확인이 필요하다고 안내하세요.)"
@@ -120,7 +125,10 @@ def render_design_sidebar():
             if design["riders"]:
                 st.markdown("**특약**")
                 for name, amount in design["riders"].items():
-                    st.markdown(f"　· {name} — **{amount:,.0f}만원**")
+                    if amount is not None:
+                        st.markdown(f"　· {name} — **{amount:,.0f}만원**")
+                    else:
+                        st.markdown(f"　· {name}")
             if not design["base_products"] and not design["riders"]:
                 st.caption("아직 설계된 내용이 없습니다. 채팅으로 상품이나 특약을 요청해보세요.")
             if st.button("🔄 설계 초기화", use_container_width=True):
@@ -181,7 +189,10 @@ def render_recommendation_sidebar():
                             if r.product not in design["base_products"]:
                                 design["base_products"].append(r.product)
                             if r.rider:
-                                design["riders"][r.rider] = r.suggested_amount or 1000
+                                # 보험료납입면제특약처럼 애초에 "가입금액" 개념이 없는
+                                # 특약(base_amount=None)에 임의로 1000만원을 넣지 않는다
+                                # — None은 design_state에서 "금액 없는 특약"으로 처리됨.
+                                design["riders"][r.rider] = r.suggested_amount
                             st.session_state.design = design
                             st.rerun()
 
@@ -234,33 +245,44 @@ if prompt := st.chat_input("가입설계에 대해 물어보세요"):
                 system_content += RELEVANCE_WARNING
 
             chat_history = [SystemMessage(content=system_content)]
-            for m in st.session_state.messages:
+            for m in st.session_state.messages[-MAX_HISTORY_MESSAGES:]:
                 if m["role"] == "user":
                     chat_history.append(HumanMessage(content=m["content"]))
                 else:
                     chat_history.append(AIMessage(content=m["content"]))
 
+        design_changed = False
         with st.spinner("생각 중..."):
-            response = llm.invoke(chat_history)
-            # content가 리스트(블록 구조)로 오면 텍스트만 뽑아냄
-            if isinstance(response.content, list):
-                answer = "".join(
-                    block.get("text", "") if isinstance(block, dict) else str(block)
-                    for block in response.content
-                )
-            else:
-                answer = response.content
+            # 검색(rag.retrieve)과 인덱싱(_add_in_batches)에는 429/일시적 오류
+            # 예외 처리가 있는데 정작 이 호출엔 없어서, 실패하면 Streamlit
+            # 기본 에러 화면이 FC에게 그대로 노출되던 문제를 같은 패턴으로 수정.
+            try:
+                response = llm.invoke(chat_history)
+                # content가 리스트(블록 구조)로 오면 텍스트만 뽑아냄
+                if isinstance(response.content, list):
+                    answer = "".join(
+                        block.get("text", "") if isinstance(block, dict) else str(block)
+                        for block in response.content
+                    )
+                else:
+                    answer = response.content
 
-            # 3) 답변에 design-update 블록이 있으면 분리해서 설계 상태에 반영
-            #    (사용자에게는 자연어 설명만 보이고, JSON은 화면에 노출하지 않음)
-            extracted = design_state.extract_design_update(answer)
-            answer = extracted.clean_answer
-            design_changed = False
-            if extracted.update is not None:
-                st.session_state.design = design_state.sanitize_design(
-                    extracted.update, st.session_state.design
-                )
-                design_changed = True
+                # 3) 답변에 design-update 블록이 있으면 분리해서 설계 상태에 반영
+                #    (사용자에게는 자연어 설명만 보이고, JSON은 화면에 노출하지 않음)
+                extracted = design_state.extract_design_update(answer)
+                answer = extracted.clean_answer
+                if extracted.update is not None:
+                    st.session_state.design = design_state.sanitize_design(
+                        extracted.update, st.session_state.design
+                    )
+                    design_changed = True
+            except Exception as e:
+                reason = "API 사용량 한도 초과" if "429" in str(e) else "일시적 오류"
+                st.caption(f"⚠️ 답변 생성 실패({reason})")
+                answer = "일시적인 오류로 답변을 생성하지 못했습니다. 잠시 후 다시 시도해주세요."
+                # 실패한 호출의 결과이므로 근거/확신도는 이 메시지에 붙이지 않는다.
+                confidence_percent = None
+                sources = None
 
             st.markdown(answer)
             if confidence_percent is not None:

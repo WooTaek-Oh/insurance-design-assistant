@@ -87,6 +87,29 @@ def get_vectorstore():
         return None
 
 
+# 캐싱: 같은 질문이 반복되면(데모 리허설, 재질문 등) 매번 임베딩 API를 다시
+# 부르지 않고 캐시된 결과를 즉시 반환한다 — 응답 속도도 빨라지고, 안 그래도
+# 빠듯한 무료 등급 쿼터도 아낄 수 있다. 캐시 키는 질문 텍스트뿐이라 벡터
+# 인덱스가 안 바뀌는 한 안전하다 (인덱스를 새로 빌드해 재배포하면 컨테이너가
+# 새로 뜨면서 캐시도 함께 초기화된다).
+@st.cache_data(show_spinner=False, ttl=3600)
+def cached_retrieve(_vectorstore, query: str, k: int = 4):
+    return rag.retrieve(_vectorstore, query, k)
+
+
+def _history_cache_key(chat_history) -> str:
+    """chat_history(LangChain 메시지 리스트)를 캐시 키로 쓸 문자열로 직렬화한다."""
+    return "\x1f".join(f"{m.type}:{m.content}" for m in chat_history)
+
+
+# 채팅 응답도 똑같은 이유로 캐싱한다. 캐시 키에는 시스템 프롬프트에 실린
+# 검색 근거·설계 상태까지 전부 들어있어서, 근거나 설계가 조금이라도 달라지면
+# 자동으로 새 키가 되어 다시 호출된다 — 오래된 답이 잘못 재사용될 위험은 없다.
+@st.cache_data(show_spinner=False, ttl=3600)
+def cached_llm_invoke(_llm, cache_key: str, _chat_history):
+    return _llm.invoke(_chat_history)
+
+
 llm = get_llm()
 vectorstore = get_vectorstore()
 
@@ -244,7 +267,7 @@ if prompt := st.chat_input("가입설계에 대해 물어보세요"):
             retrieved = []
             if vectorstore:
                 try:
-                    retrieved = rag.retrieve(vectorstore, prompt, k=4)
+                    retrieved = cached_retrieve(vectorstore, prompt, k=4)
                 except Exception as e:
                     reason = "API 사용량 한도 초과" if "429" in str(e) else "일시적 오류"
                     st.caption(f"⚠️ 약관 검색 실패({reason})로 근거 없이 답변합니다.")
@@ -278,7 +301,8 @@ if prompt := st.chat_input("가입설계에 대해 물어보세요"):
             # 예외 처리가 있는데 정작 이 호출엔 없어서, 실패하면 Streamlit
             # 기본 에러 화면이 FC에게 그대로 노출되던 문제를 같은 패턴으로 수정.
             try:
-                response = llm.invoke(chat_history)
+                cache_key = _history_cache_key(chat_history)
+                response = cached_llm_invoke(llm, cache_key, chat_history)
                 # content가 리스트(블록 구조)로 오면 텍스트만 뽑아냄
                 if isinstance(response.content, list):
                     answer = "".join(

@@ -19,21 +19,25 @@ from dataclasses import dataclass, field
 # 화면에 노출되지 않는다 (JSON이 깨졌을 때를 대비해 (\{.*?\}) 대신 (.*?) 사용).
 DESIGN_BLOCK_RE = re.compile(r"```design-update\s*(.*?)\s*```", re.DOTALL)
 
-DEFAULT_DESIGN = {"base_product": None, "riders": {}}
+DEFAULT_DESIGN = {"base_products": [], "riders": {}}
 
 SYSTEM_PROMPT_ADDITION = """
 
 [가입설계 상태 관리 규칙]
 - 아래 "[현재 설계 상태]"는 지금까지 대화로 합의된 가입설계 내용입니다.
-- 사용자가 주계약 선택/변경, 특약 추가·삭제, 가입금액 변경 등 설계를
+  base_products는 고객이 가입하기로 한 주계약(보험 상품) 목록입니다.
+  고객은 암보험 + 연금보험처럼 서로 다른 상품을 동시에 여러 개
+  가입할 수 있으므로 리스트 형태입니다.
+- 사용자가 주계약 추가/변경, 특약 추가·삭제, 가입금액 변경 등 설계를
   수정해달라고 요청하면:
   1. 무엇을 어떻게 바꿨는지 자연스러운 말로 설명하세요.
   2. 답변 맨 마지막 줄에 반드시 이번 요청까지 반영한 "전체" 설계 상태를
      아래 형식의 JSON 코드블록으로 출력하세요 (이전 상태를 그대로 복사하지
-     말고, 이번 변경을 합친 최신 전체 상태를 출력):
+     말고, 이번 변경을 합친 최신 전체 상태를 출력. 기존에 있던 주계약을
+     빼달라는 요청이 아니면 base_products 리스트에서 지우지 말고 유지):
 
 ```design-update
-{"base_product": "상품명 또는 null", "riders": {"특약명": 가입금액_만원_숫자}}
+{"base_products": ["상품명1", "상품명2"], "riders": {"특약명": 가입금액_만원_숫자}}
 ```
 
 - 설계 수정 요청이 아닌 일반 질문이나 잡담에는 이 블록을 절대 출력하지 마세요.
@@ -75,10 +79,20 @@ def extract_design_update(answer_text: str) -> ExtractResult:
 
 
 def sanitize_design(raw: dict, fallback: dict) -> dict:
-    """LLM이 출력한 design-update를 검증/정제해서 안전한 상태로 만든다."""
-    base_product = raw.get("base_product")
-    if not isinstance(base_product, str) or not base_product.strip():
-        base_product = fallback.get("base_product")
+    """LLM이 출력한 design-update를 검증/정제해서 안전한 상태로 만든다.
+
+    base_products는 리스트여야 하지만, 혹시 LLM이 예전 스키마(단일
+    base_product 문자열)로 출력하거나 형식을 안 지켜도 깨지지 않도록
+    방어적으로 처리한다.
+    """
+    base_products_raw = raw.get("base_products")
+    if isinstance(base_products_raw, list):
+        base_products = [p.strip() for p in base_products_raw if isinstance(p, str) and p.strip()]
+    elif isinstance(raw.get("base_product"), str) and raw["base_product"].strip():
+        # 하위 호환: 혹시 LLM이 예전 단일 필드로 출력한 경우
+        base_products = [raw["base_product"].strip()]
+    else:
+        base_products = list(fallback.get("base_products", []))
 
     riders_raw = raw.get("riders")
     riders: dict[str, float] = {}
@@ -89,4 +103,4 @@ def sanitize_design(raw: dict, fallback: dict) -> dict:
             if isinstance(amount, (int, float)) and amount > 0:
                 riders[name.strip()] = amount
 
-    return {"base_product": base_product, "riders": riders}
+    return {"base_products": base_products, "riders": riders}

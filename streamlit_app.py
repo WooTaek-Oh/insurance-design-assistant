@@ -100,26 +100,31 @@ RELEVANCE_WARNING = (
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "design" not in st.session_state:
-    st.session_state.design = {"base_product": None, "riders": {}}
+    st.session_state.design = {"base_products": [], "riders": {}}
 
 
 def render_design_sidebar():
-    """현재까지 대화로 합의된 가입설계 상태를 사이드바에 실시간으로 보여준다."""
+    """현재까지 대화로 합의된 가입설계 상태를 사이드바에 실시간으로 보여준다.
+
+    고객이 암보험 + 연금보험처럼 서로 다른 상품을 동시에 여러 개 가입할 수
+    있어서 base_products는 리스트다.
+    """
     with st.sidebar:
         with st.container(border=True):
             st.markdown("#### 📋 현재 가입설계")
             design = st.session_state.design
-            if design["base_product"]:
-                st.markdown(f"**주계약**")
-                st.markdown(f"　{design['base_product']}")
+            if design["base_products"]:
+                st.markdown("**주계약**")
+                for product in design["base_products"]:
+                    st.markdown(f"　· {product}")
             if design["riders"]:
                 st.markdown("**특약**")
                 for name, amount in design["riders"].items():
                     st.markdown(f"　· {name} — **{amount:,.0f}만원**")
-            if not design["base_product"] and not design["riders"]:
+            if not design["base_products"] and not design["riders"]:
                 st.caption("아직 설계된 내용이 없습니다. 채팅으로 상품이나 특약을 요청해보세요.")
             if st.button("🔄 설계 초기화", use_container_width=True):
-                st.session_state.design = {"base_product": None, "riders": {}}
+                st.session_state.design = {"base_products": [], "riders": {}}
                 st.rerun()
 
 
@@ -173,8 +178,8 @@ def render_recommendation_sidebar():
                             st.caption(f"· {reason}")
                         if st.button("➕ 설계에 추가", key=f"add_reco_{i}", use_container_width=True):
                             design = st.session_state.design
-                            if not design["base_product"]:
-                                design["base_product"] = r.product
+                            if r.product not in design["base_products"]:
+                                design["base_products"].append(r.product)
                             if r.rider:
                                 design["riders"][r.rider] = r.suggested_amount or 1000
                             st.session_state.design = design

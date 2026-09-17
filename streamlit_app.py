@@ -52,11 +52,29 @@ CHAT_MODEL = "gemini-3.6-flash"
 
 @st.cache_resource
 def get_llm():
-    return ChatGoogleGenerativeAI(
-        model=CHAT_MODEL,
-        google_api_key=st.secrets["GOOGLE_API_KEY"],
-        temperature=0.3,
-    )
+    """챗 모델을 초기화한다.
+
+    get_vectorstore()와 달리 이건 실패하면 앱이 아예 기능을 할 수 없으므로
+    (LLM 없이는 대화 자체가 불가능), "일반 모드로 낮추기"가 아니라 원인을
+    명확히 알려주고 st.stop()으로 깔끔하게 멈춘다. 예전에는 예외처리가
+    전혀 없어서 GOOGLE_API_KEY가 비어있으면 Streamlit 기본 에러 화면(원인을
+    알 수 없는 트레이스백)이 모든 사용자에게 매번 노출됐다.
+    """
+    try:
+        api_key = st.secrets["GOOGLE_API_KEY"]
+    except Exception:
+        st.error(
+            "⚠️ GOOGLE_API_KEY가 설정되지 않았습니다. 로컬은 "
+            "`.streamlit/secrets.toml`, 배포 환경은 Streamlit Cloud의 "
+            "App settings → Secrets에 등록해주세요."
+        )
+        st.stop()
+
+    try:
+        return ChatGoogleGenerativeAI(model=CHAT_MODEL, google_api_key=api_key, temperature=0.3)
+    except Exception as e:
+        st.error(f"⚠️ Gemini 챗 모델 초기화에 실패했습니다: {e}")
+        st.stop()
 
 
 # 미리 인덱싱해둔 chroma_db/ 를 로드 (없으면 None → 일반 대화 모드로 동작)
@@ -160,16 +178,19 @@ def render_recommendation_sidebar():
             income = st.selectbox("소득 수준", ["낮음", "중간", "높음"], index=1, key="reco_income")
 
             if st.button("🔍 추천 받기", key="reco_button"):
-                profile = reco.CustomerProfile(
-                    age=age,
-                    gender="",
-                    has_children=has_children,
-                    family_history=family_history,
-                    existing_products=existing,
-                    concerns=concerns,
-                    income_level=income,
-                )
-                st.session_state.recommendations = reco.recommend(profile)
+                try:
+                    profile = reco.CustomerProfile(
+                        age=age,
+                        gender="",
+                        has_children=has_children,
+                        family_history=family_history,
+                        existing_products=existing,
+                        concerns=concerns,
+                        income_level=income,
+                    )
+                    st.session_state.recommendations = reco.recommend(profile)
+                except Exception as e:
+                    st.error(f"추천 계산 중 오류가 발생했습니다: {e}")
 
             recs = st.session_state.get("recommendations")
             if recs:

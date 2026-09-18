@@ -3,7 +3,7 @@
 > ## 💬 모든 답변은, 근거 위에.
 
 - **서비스명**: 가입설계 챗봇 (동양생명 FC 지원 AI 어시스턴트)
-- **프로젝트 기간**: 2026.09.10 ~ 2026.09.18
+- **프로젝트 기간**: 2026.09.10 – 2026.09.18
 - **개발 인원**: 1명 (기획/개발, Claude Code·Codex와 페어 프로그래밍)
 - **과제**: 코멘토 AI SWA 부트캠프 2차 과제 — 동양생명 "가입설계 자동화 챗봇 서비스 구축" RFP 프로토타입
 
@@ -59,7 +59,7 @@ RFP에서 도출한 5가지 핵심기능 중, Streamlit 프로토타입 범위�
 
 ### 확률적 근거 표시 (확신도 %)
 
-- LLM이 확신도를 말로 지어내지 않고, 벡터 검색 거리값을 그대로 0~100% 확신도로 환산
+- LLM이 확신도를 말로 지어내지 않고, 벡터 검색 거리값을 그대로 0–100% 확신도로 환산
 - 형식이 깨질 위험도, 근거 없이 점수를 부풀릴 위험도 없는 결정론적 계산
 
 ### AI 가입설계 추천 (규칙 기반)
@@ -86,10 +86,13 @@ RFP에서 도출한 5가지 핵심기능 중, Streamlit 프로토타입 범위�
 
 # 📱 주요 화면
 
-<img src="assets/screenshot-recommend.png" width="260" alt="AI 가입설계 추천 결과"> <img src="assets/screenshot-design.png" width="260" alt="현재 가입설계 상태"> <img src="assets/screenshot-flow2.png" width="260" alt="대화 흐름">
+<img src="assets/screenshot-recommend.png" width="280" alt="AI 가입설계 추천 결과"> <img src="assets/screenshot-design.png" width="280" alt="현재 가입설계 상태">
 
 - **AI 가입설계 추천**: 고객 정보를 입력하면 근거와 함께 상품·특약을 추천하고, 버튼 한 번으로 설계에 반영합니다.
 - **현재 가입설계**: 대화와 추천으로 합의된 주계약·특약이 사이드바에 실시간으로 쌓입니다.
+
+<img src="assets/screenshot-flow2.png" width="700" alt="대화 흐름">
+
 - **대화 흐름**: 설계 수정 요청과 약관 질문에 안전하게 응답하며, 근거가 없으면 "확인이 필요합니다"로 답합니다.
 
 <br>
@@ -102,11 +105,11 @@ RFP에서 도출한 5가지 핵심기능 중, Streamlit 프로토타입 범위�
 
 - 근거 채택 여부와 확신도 모두 **벡터 검색 거리값**에서 직접 계산합니다.
 - LLM에게 "확신도를 %로 말해줘"라고 시키지 않는 이유: 형식을 안 지킬 수 있고, 근거 없이 숫자를 지어낼 위험이 있기 때문입니다.
-- 실측 보정: 실제 관련 질문 거리 0.41~0.57, 무관한 질문 거리 0.64~0.77 — 이 간격을 기준으로 임계값(0.60)과 확신도 환산식을 튜닝했습니다.
+- 실측 보정: 실제 관련 질문 거리 0.41–0.57, 무관한 질문 거리 0.64–0.77 — 이 간격을 기준으로 임계값(0.60)과 확신도 환산식을 튜닝했습니다.
 
 ### 무료 등급 임베딩 쿼터 대응 인프라
 
-- Gemini 임베딩 API 무료 등급(하루 1,000건, 실측상 롤링 윈도우에 가까운 회복 패턴)에서 대량 문서(957페이지~)를 안전하게 인덱싱하기 위해 작은 배치 + 지수 백오프 + **소스 파일명 기반 안정 ID**로 언제 끊겨도 이어서 진행되는 인덱싱 스크립트를 직접 구현했습니다.
+- Gemini 임베딩 API 무료 등급(하루 1,000건, 실측상 롤링 윈도우에 가까운 회복 패턴)에서 대량 문서(957페이지 이상)를 안전하게 인덱싱하기 위해 작은 배치 + 지수 백오프 + **소스 파일명 기반 안정 ID**로 언제 끊겨도 이어서 진행되는 인덱싱 스크립트를 직접 구현했습니다.
 - 인덱스가 손상된 적이 있었는데(문서 추가로 청크 ID가 밀려 일부가 누락), 이미 계산된 임베딩 벡터를 텍스트 매칭으로 복구해 **API 호출 없이** 재구성하는 복구 스크립트도 만들었습니다.
 
 ### 대화형 상태 관리 (구조화 출력 파싱)
@@ -248,7 +251,7 @@ GOOGLE_API_KEY = "발급받은_키_값"
 - 무료 등급 Gemini API의 요청 한도로 인해, 대량의 문서를 새로 인덱싱할 때는
   하루 이상(문서 분량에 따라 며칠) 걸릴 수 있습니다. 페이지 수가 수천
   페이지에 달하는 약관(`docs/_pending/`에 보류 중인 건강보장보험·종신보험)은
-  전체 인덱싱에 1~2주가 걸릴 수 있어 이번 프로토타입에서는 제외했습니다.
+  전체 인덱싱에 1–2주가 걸릴 수 있어 이번 프로토타입에서는 제외했습니다.
 - 현재 인덱싱된 상품(3종, 총 2,960개 청크): 암보험(무배당우리WON하는암보험,
   100%), 연금보험(무배당우리WON하는누구나행복연금보험, 약 98%), 실손의료비
   (무배당우리WON하는급여실손의료비보장보험, 약 86%). 연금·실손 일부 조항은
@@ -266,16 +269,18 @@ GOOGLE_API_KEY = "발급받은_키_값"
 # ⚙️ 기술 스택
 
 ### Frontend / Backend
-Streamlit
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)
 
 ### Orchestration
-LangChain
+![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white)
 
 ### AI
-Google Gemini API (`gemini-3.6-flash`), Google Gemini Embedding API (`gemini-embedding-001`)
+![Google Gemini](https://img.shields.io/badge/Google_Gemini-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)
 
 ### Data
-Chroma (벡터스토어)
+![Chroma](https://img.shields.io/badge/Chroma-FF6F00?style=for-the-badge&logoColor=white)
 
 ### Infra
-Streamlit Community Cloud, GitHub
+![Streamlit Community Cloud](https://img.shields.io/badge/Streamlit_Cloud-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)
+![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)
